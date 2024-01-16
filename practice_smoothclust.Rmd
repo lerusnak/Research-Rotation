@@ -1,0 +1,109 @@
+---
+title: "Practice with Smoothclust"
+author: "Lauren Rusnak"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Packages ???
+
+```{r}
+library(SpatialExperiment)
+library(STexampleData)
+library(scran)
+library(ggspavis)
+library(scater)
+```
+
+## Example
+
+*Download data object*
+```{r}
+spe <- Visium_humanDLPFC()
+spe <- spe[, colData(spe)$in_tissue == 1]
+```
+
+*Calculate highly variable genes (HVGs)*
+```{r}
+spe <- logNormCounts(spe)
+is_mito <- grepl("(^MT-)|(^mt-)", rowData(spe)$gene_name) # filter for mitochondrial genes (*Note grepl has 'L' at end not '1')
+spe <- spe[!is_mito, ] # remove mitochondrial genes
+# keep full object for plotting
+spe_full <- spe
+```
+
+
+```{r}
+dec <- modelGeneVar(spe)
+top_hvgs <- getTopHVGs(dec, prop = 0.1)
+spe <- spe[top_hvgs, ]
+dim(spe)
+```
+
+
+### **RUN SMOOTHCLUST**
+
+```{r}
+library(smoothclust)
+```
+
+
+
+```{r}
+# run smoothclust
+spe <- smoothclust(spe)
+```
+
+```{r}
+# check
+assayNames(spe)
+```
+
+
+
+
+```{r}
+library(ggspavis)
+```
+
+```{r}
+# plot clusters in spatial x-y coordinates
+plotSpots(spe, annotate = "label", 
+          palette = "libd_layer_colors")
+```
+
+```{r}
+# plot ground truth labels in spatial coordinates
+plotSpots(spe, annotate = "ground_truth", 
+          palette = "libd_layer_colors")
+```
+
+```{r}
+# plot clusters in PCA reduced dimensions
+plotDimRed(spe, type = "PCA", 
+           annotate = "label", palette = "libd_layer_colors")
+```
+
+```{r}
+# plot clusters in UMAP reduced dimensions
+plotDimRed(spe, type = "UMAP", 
+           annotate = "label", palette = "libd_layer_colors")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

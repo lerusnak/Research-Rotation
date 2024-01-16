@@ -9,7 +9,19 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Load Data (5)
+## Packages
+
+```{r}
+library(SpatialExperiment)
+library(STexampleData)
+library(ggspavis)
+library(scater)
+library(scran)
+```
+
+
+
+## Load Data - 5
 
 ```{r include=FALSE}
 library(SpatialExperiment)
@@ -56,6 +68,7 @@ head(spatialCoords(spe))
 # image data
 imgData(spe)
 ```
+ 
   + *What do the columns output by imgData(spe) mean?*
 
 

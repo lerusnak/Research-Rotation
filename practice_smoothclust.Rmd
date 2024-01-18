@@ -124,15 +124,35 @@ library(ggspavis)
 ```{r}
 # plot clusters in spatial x-y coordinates
 plotSpots(spe, annotate = "label", 
-          palette = "libd_layer_colors")
+          palette = "libd_layer_colors",
+          size = 0.7)
 ```
 
 ```{r}
 # plot ground truth labels in spatial coordinates
 plotSpots(spe, annotate = "ground_truth", 
-          palette = "libd_layer_colors") # annotate - for clustering labels, use smoothclust labels later
+          palette = "libd_layer_colors",
+          size = 0.7) # annotate - for clustering labels, use smoothclust labels later
 ```
 
+
+Reduced Dimensionality Cluster Visualization
+
+```{r}
+# plot clusters in PCA reduced dimensions
+plotDimRed(spe, type = "PCA", 
+           annotate = "label", palette = "libd_layer_colors",
+           size = 0.7)
+```
+
+
+
+```{r}
+# plot clusters in UMAP reduced dimensions
+plotDimRed(spe, type = "UMAP", 
+           annotate = "label", palette = "libd_layer_colors",
+           size = 0.7)
+```
 
 
 

@@ -9,7 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Packages ???
+## Packages
 
 ```{r}
 library(SpatialExperiment)
@@ -19,27 +19,37 @@ library(ggspavis)
 library(scater)
 ```
 
-## Example
+## Example of smoothclust workflow
+
+### Load Data
 
 *Download data object*
 ```{r}
-spe <- Visium_humanDLPFC()
-spe <- spe[, colData(spe)$in_tissue == 1]
+spe <- Visium_humanDLPFC() # human dorsolateral prefrontal cortex dataset
+spe <- spe[, colData(spe)$in_tissue == 1] # selecting spatial coodinates that are in the tissue
 ```
+
+### Normalization and Feature Selection
 
 *Calculate highly variable genes (HVGs)*
 ```{r}
-spe <- logNormCounts(spe)
+# Normalization - transform assay counts to normalize data (Using library size factors)
+spe <- logNormCounts(spe) 
+
 is_mito <- grepl("(^MT-)|(^mt-)", rowData(spe)$gene_name) # filter for mitochondrial genes (*Note grepl has 'L' at end not '1')
 spe <- spe[!is_mito, ] # remove mitochondrial genes
+
 # keep full object for plotting
 spe_full <- spe
 ```
 
 
 ```{r}
-dec <- modelGeneVar(spe)
-top_hvgs <- getTopHVGs(dec, prop = 0.1)
+# library(scran)
+
+# fit mean-variance relationship
+dec <- modelGeneVar(spe) # model the variance of the log-expression profiles for each gene
+top_hvgs <- getTopHVGs(dec, prop = 0.1) # top 10% of genes with the highest variance of log-expression are chosen
 spe <- spe[top_hvgs, ]
 dim(spe)
 ```
@@ -51,11 +61,9 @@ dim(spe)
 library(smoothclust)
 ```
 
-
-
 ```{r}
 # run smoothclust
-spe <- smoothclust(spe)
+spe <- smoothclust(spe, method = "kernel")
 ```
 
 ```{r}
@@ -64,6 +72,49 @@ assayNames(spe)
 ```
 
 
+### Dimensionality reduction
+
+```{r}
+# compute PCA
+set.seed(123)
+spe <- runPCA(spe, subset_row = top_hvgs, exprs_values = "logcounts_smooth")
+
+dim(reducedDim(spe, "PCA"))
+```
+
+```{r}
+# UMAP on top 50 PCs -> for visualization
+set.seed(123)
+spe <-  runUMAP(spe, dimred= "PCA", exprs_values = "logcounts_smooth")
+
+dim(reducedDim(spe, "PCA"))
+dim(reducedDim(spe, "UMAP"))
+```
+
+```{r}
+# update column names
+colnames(reducedDim(spe, "UMAP")) <- paste0("UMAP", 1:2)
+```
+
+
+
+
+### Clustering
+
+```{r}
+# graph-based clustering
+set.seed(123)
+k <- 45
+g <- buildSNNGraph(spe, k = k,  use.dimred = "PCA")
+g_walk <- igraph::cluster_walktrap(g)
+clus <- g_walk$membership
+table(clus)
+```
+
+```{r}
+# store cluster labels in column 'label' in colData
+colLabels(spe) <- factor(clus)
+```
 
 
 ```{r}
@@ -79,29 +130,8 @@ plotSpots(spe, annotate = "label",
 ```{r}
 # plot ground truth labels in spatial coordinates
 plotSpots(spe, annotate = "ground_truth", 
-          palette = "libd_layer_colors")
+          palette = "libd_layer_colors") # annotate - for clustering labels, use smoothclust labels later
 ```
-
-```{r}
-# plot clusters in PCA reduced dimensions
-plotDimRed(spe, type = "PCA", 
-           annotate = "label", palette = "libd_layer_colors")
-```
-
-```{r}
-# plot clusters in UMAP reduced dimensions
-plotDimRed(spe, type = "UMAP", 
-           annotate = "label", palette = "libd_layer_colors")
-```
-
-
-
-
-
-
-
-
-
 
 
 

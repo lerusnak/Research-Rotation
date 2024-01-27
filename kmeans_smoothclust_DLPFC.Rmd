@@ -1,0 +1,746 @@
+---
+title: "K-means Clustering with smoothclust"
+author: "Lauren Rusnak"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Packages
+
+```{r}
+library(SpatialExperiment)
+library(STexampleData)
+library(scran)
+library(ggspavis)
+library(scater)
+library(smoothclust)
+library(stats)
+```
+
+
+
+### Load Data
+
+*Download data object*
+```{r}
+spe <- Visium_humanDLPFC() # human dorsolateral prefrontal cortex dataset
+spe <- spe[, colData(spe)$in_tissue == 1] # selecting spatial coodinates that are in the tissue
+```
+
+### Normalization and Feature Selection
+
+*Calculate highly variable genes (HVGs)*
+```{r}
+# Normalization - transform assay counts to normalize data (Using library size factors)
+spe <- logNormCounts(spe) 
+
+is_mito <- grepl("(^MT-)|(^mt-)", rowData(spe)$gene_name) # filter for mitochondrial genes (*Note grepl has 'L' at end not '1')
+spe <- spe[!is_mito, ] # remove mitochondrial genes
+
+# keep full object for plotting
+spe_full <- spe
+```
+
+
+```{r}
+# library(scran)
+
+# fit mean-variance relationship
+dec <- modelGeneVar(spe) # model the variance of the log-expression profiles for each gene
+top_hvgs <- getTopHVGs(dec, prop = 0.1) # top 10% of genes with the highest variance of log-expression are chosen
+spe <- spe[top_hvgs, ]
+dim(spe)
+```
+
+
+_________________________________________________________________________
+
+
+### **RUN SMOOTHCLUST**
+
+#### Method: Uniform
+
+```{r}
+# library(smoothclust)
+
+# run smoothclust
+spe <- smoothclust(spe, method = "uniform")
+```
+
+```{r}
+# check
+assayNames(spe)
+```
+
+
+##### Dimensionality reduction
+
+```{r}
+# compute PCA
+set.seed(123)
+spe <- runPCA(spe, subset_row = top_hvgs, exprs_values = "logcounts_smooth")
+
+dim(reducedDim(spe, "PCA"))
+```
+
+```{r}
+# UMAP on top 50 PCs -> for visualization
+set.seed(123)
+spe <-  runUMAP(spe, dimred= "PCA", exprs_values = "logcounts_smooth")
+
+dim(reducedDim(spe, "PCA"))
+dim(reducedDim(spe, "UMAP"))
+```
+
+```{r}
+# update column names
+colnames(reducedDim(spe, "UMAP")) <- paste0("UMAP", 1:2)
+```
+
+
+```{r}
+plotDimRed(spe, type = "PCA")
+```
+
+```{r}
+pcs <- reducedDim(spe, "PCA")
+plot(pcs)
+```
+
+
+##### Clustering
+
+*k-means*
+
+```{r}
+Wss <- c()
+
+for(i in 1:10){
+  km <- kmeans(pcs, i)
+  Wss <- c(Wss, km$tot.withinss)
+}
+
+plot(c(1:10), Wss, type = 'l') ## kink at 2 (maybe another at 4 and maybe abother at 6)
+
+```
+
+```{r}
+km.2 <- kmeans(pcs, centers = 2)
+
+plot(pcs[,1], pcs[,2])
+for(i in 1:2){
+    points(pcs[which(km.2$cluster == i),1],
+          pcs[which(km.2$cluster == i),2],col=i)
+  }
+```
+
+
+
+
+```{r}
+set.seed(123)
+km.7 <- kmeans(pcs, centers = 7)
+
+table(km.7$cluster)
+
+# plot(pcs[,1], pcs[,2])
+# for(i in 1:7){
+    # points(pcs[which(km.7$cluster == i),1],
+         # pcs[which(km.7$cluster == i),2],col=i)
+#  }
+```
+
+```{r}
+# kmeans cluster assignments
+km.clus <- km.7$cluster
+
+# store cluster label in column 'label' in colData
+colLabels(spe) <- factor(km.clus)
+```
+
+
+##### Visualizations
+
+```{r}
+# plot clusters in spatial x-y coordinates
+plotSpots(spe, annotate = "label", 
+          palette = "libd_layer_colors",
+          size = 0.8)
+```
+
+```{r}
+# plot ground truth labels in spatial coordinates
+plotSpots(spe, annotate = "ground_truth", 
+          palette = "libd_layer_colors",
+          size = 0.7) # annotate - for clustering labels, use smoothclust labels later
+```
+
+
+Reduced Dimensionality Cluster Visualization
+
+```{r}
+# plot clusters in PCA reduced dimensions
+plotDimRed(spe, type = "PCA", 
+           annotate = "label", palette = "libd_layer_colors",
+           size = 0.7)
+```
+
+
+
+```{r}
+# plot clusters in UMAP reduced dimensions
+plotDimRed(spe, type = "UMAP", 
+           annotate = "label", palette = "libd_layer_colors",
+           size = 0.7)
+```
+
+_________________________________________________________________________
+
+
+#### Method: Kernel, bandwidth = 0.02
+
+```{r}
+# library(smoothclust)
+
+# run smoothclust
+spe <- smoothclust(spe, method = "kernel", bandwidth = 0.02)
+```
+
+```{r}
+# check
+assayNames(spe)
+```
+
+
+##### Dimensionality reduction
+
+```{r}
+# compute PCA
+set.seed(123)
+spe <- runPCA(spe, subset_row = top_hvgs, exprs_values = "logcounts_smooth")
+
+dim(reducedDim(spe, "PCA"))
+```
+
+```{r}
+# UMAP on top 50 PCs -> for visualization
+set.seed(123)
+spe <-  runUMAP(spe, dimred= "PCA", exprs_values = "logcounts_smooth")
+
+dim(reducedDim(spe, "PCA"))
+dim(reducedDim(spe, "UMAP"))
+```
+
+```{r}
+# update column names
+colnames(reducedDim(spe, "UMAP")) <- paste0("UMAP", 1:2)
+```
+
+
+```{r}
+plotDimRed(spe, type = "PCA")
+```
+
+```{r}
+pcs <- reducedDim(spe, "PCA")
+# plot(pcs)
+```
+
+
+
+##### Clustering
+
+*k-means*
+
+```{r}
+Wss <- c()
+
+for(i in 1:10){
+  km <- kmeans(pcs, i)
+  Wss <- c(Wss, km$tot.withinss)
+}
+
+plot(c(1:10), Wss, type = 'l') ## kink at 2 (maybe another at 4 and maybe abother at 6)
+
+```
+
+```{r}
+km.2 <- kmeans(pcs, centers = 2)
+
+# plot(pcs[,1], pcs[,2])
+# for(i in 1:2){
+    # points(pcs[which(km.2$cluster == i),1],
+         # pcs[which(km.2$cluster == i),2],col=i)
+#  }
+```
+
+
+
+
+```{r}
+set.seed(123)
+km.7 <- kmeans(pcs, centers = 7)
+
+table(km.7$cluster)
+
+# plot(pcs[,1], pcs[,2])
+# for(i in 1:7){
+    # points(pcs[which(km.7$cluster == i),1],
+          # pcs[which(km.7$cluster == i),2],col=i)
+#  }
+```
+
+```{r}
+# kmeans cluster assignments
+km.clus <- km.7$cluster
+
+# store cluster label in column 'label' in colData
+colLabels(spe) <- factor(km.clus)
+```
+
+
+##### Visualizations
+
+```{r}
+# plot clusters in spatial x-y coordinates
+plotSpots(spe, annotate = "label", 
+          palette = "libd_layer_colors",
+          size = 0.8)
+```
+
+```{r}
+# plot ground truth labels in spatial coordinates
+plotSpots(spe, annotate = "ground_truth", 
+          palette = "libd_layer_colors",
+          size = 0.7) # annotate - for clustering labels, use smoothclust labels later
+```
+
+
+Reduced Dimensionality Cluster Visualization
+
+```{r}
+# plot clusters in PCA reduced dimensions
+plotDimRed(spe, type = "PCA", 
+           annotate = "label", palette = "libd_layer_colors",
+           size = 0.7)
+```
+
+
+
+```{r}
+# plot clusters in UMAP reduced dimensions
+plotDimRed(spe, type = "UMAP", 
+           annotate = "label", palette = "libd_layer_colors",
+           size = 0.7)
+```
+
+
+
+_______________________________________________________________________
+
+
+#### Method: kernel, bandwidth = 0.04
+
+
+```{r}
+# library(smoothclust)
+
+# run smoothclust
+spe <- smoothclust(spe, method = "kernel", bandwidth = 0.04)
+```
+
+```{r}
+# check
+assayNames(spe)
+```
+
+
+##### Dimensionality reduction
+
+```{r}
+# compute PCA
+set.seed(123)
+spe <- runPCA(spe, subset_row = top_hvgs, exprs_values = "logcounts_smooth")
+
+dim(reducedDim(spe, "PCA"))
+```
+
+```{r}
+# UMAP on top 50 PCs -> for visualization
+set.seed(123)
+spe <-  runUMAP(spe, dimred= "PCA", exprs_values = "logcounts_smooth")
+
+dim(reducedDim(spe, "PCA"))
+dim(reducedDim(spe, "UMAP"))
+```
+
+```{r}
+# update column names
+colnames(reducedDim(spe, "UMAP")) <- paste0("UMAP", 1:2)
+```
+
+
+```{r}
+plotDimRed(spe, type = "PCA")
+```
+
+```{r}
+pcs <- reducedDim(spe, "PCA")
+# plot(pcs)
+```
+
+
+
+##### Clustering
+
+*k-means*
+
+```{r}
+Wss <- c()
+
+for(i in 1:10){
+  km <- kmeans(pcs, i)
+  Wss <- c(Wss, km$tot.withinss)
+}
+
+plot(c(1:10), Wss, type = 'l') ## kink at 2 (maybe another at 4 and maybe abother at 6)
+
+```
+
+```{r}
+km.4 <- kmeans(pcs, centers = 4)
+
+# plot(pcs[,1], pcs[,2])
+# for(i in 1:2){
+    # points(pcs[which(km.2$cluster == i),1],
+         # pcs[which(km.2$cluster == i),2],col=i)
+#  }
+```
+
+
+
+
+```{r}
+set.seed(123)
+km.7 <- kmeans(pcs, centers = 7)
+
+table(km.7$cluster)
+
+# plot(pcs[,1], pcs[,2])
+# for(i in 1:7){
+    # points(pcs[which(km.7$cluster == i),1],
+          # pcs[which(km.7$cluster == i),2],col=i)
+#  }
+```
+
+```{r}
+# kmeans cluster assignments
+km.clus <- km.4$cluster
+
+# store cluster label in column 'label' in colData
+colLabels(spe) <- factor(km.clus)
+```
+
+
+##### Visualizations
+
+```{r}
+# plot clusters in spatial x-y coordinates
+plotSpots(spe, annotate = "label", 
+          palette = "libd_layer_colors",
+          size = 0.8)
+```
+
+```{r}
+# plot ground truth labels in spatial coordinates
+plotSpots(spe, annotate = "ground_truth", 
+          palette = "libd_layer_colors",
+          size = 0.7) # annotate - for clustering labels, use smoothclust labels later
+```
+
+
+
+_______________________________________________________________________
+
+#### Method: Kernel , bandwidth = 0.05
+
+```{r}
+# library(smoothclust)
+
+# run smoothclust
+spe <- smoothclust(spe, method = "kernel", bandwidth = 0.05)
+```
+
+```{r}
+# check
+assayNames(spe)
+```
+
+
+##### Dimensionality reduction
+
+```{r}
+# compute PCA
+set.seed(123)
+spe <- runPCA(spe, subset_row = top_hvgs, exprs_values = "logcounts_smooth")
+
+dim(reducedDim(spe, "PCA"))
+```
+
+```{r}
+# UMAP on top 50 PCs -> for visualization
+set.seed(123)
+spe <-  runUMAP(spe, dimred= "PCA", exprs_values = "logcounts_smooth")
+
+dim(reducedDim(spe, "PCA"))
+dim(reducedDim(spe, "UMAP"))
+```
+
+```{r}
+# update column names
+colnames(reducedDim(spe, "UMAP")) <- paste0("UMAP", 1:2)
+```
+
+
+```{r}
+plotDimRed(spe, type = "PCA")
+```
+
+```{r}
+pcs <- reducedDim(spe, "PCA")
+# plot(pcs)
+```
+
+
+
+##### Clustering
+
+*k-means*
+
+```{r}
+Wss <- c()
+
+for(i in 1:10){
+  km <- kmeans(pcs, i)
+  Wss <- c(Wss, km$tot.withinss)
+}
+
+plot(c(1:10), Wss, type = 'l') ## kink at 2 (maybe another at 4 and maybe abother at 6)
+
+```
+
+```{r}
+km.2 <- kmeans(pcs, centers = 2)
+
+# plot(pcs[,1], pcs[,2])
+# for(i in 1:2){
+    # points(pcs[which(km.2$cluster == i),1],
+          # pcs[which(km.2$cluster == i),2],col=i)
+#  }
+```
+
+
+
+
+```{r}
+set.seed(123)
+km.7 <- kmeans(pcs, centers = 7)
+
+table(km.7$cluster)
+
+# plot(pcs[,1], pcs[,2])
+# for(i in 1:7){
+   # points(pcs[which(km.7$cluster == i),1],
+         # pcs[which(km.7$cluster == i),2],col=i)
+#  }
+```
+
+```{r}
+# kmeans cluster assignments
+km.clus <- km.7$cluster
+
+# store cluster label in column 'label' in colData
+colLabels(spe) <- factor(km.clus)
+```
+
+
+##### Visualizations
+
+```{r}
+# plot clusters in spatial x-y coordinates
+plotSpots(spe, annotate = "label", 
+          palette = "libd_layer_colors",
+          size = 0.8)
+```
+
+```{r}
+# plot ground truth labels in spatial coordinates
+plotSpots(spe, annotate = "ground_truth", 
+          palette = "libd_layer_colors",
+          size = 0.7) # annotate - for clustering labels, use smoothclust labels later
+```
+
+
+Reduced Dimensionality Cluster Visualization
+
+```{r}
+# plot clusters in PCA reduced dimensions
+plotDimRed(spe, type = "PCA", 
+           annotate = "label", palette = "libd_layer_colors",
+           size = 0.7)
+```
+
+
+```{r}
+# plot clusters in UMAP reduced dimensions
+plotDimRed(spe, type = "UMAP", 
+           annotate = "label", palette = "libd_layer_colors",
+           size = 0.7)
+```
+
+
+
+_____________________________________________________________________
+
+
+
+#### Method: Kernel , bandwidth = 0.1
+
+```{r}
+# library(smoothclust)
+
+# run smoothclust
+spe <- smoothclust(spe, method = "kernel", bandwidth = 0.1)
+```
+
+```{r}
+# check
+assayNames(spe)
+```
+
+
+##### Dimensionality reduction
+
+```{r}
+# compute PCA
+set.seed(123)
+spe <- runPCA(spe, subset_row = top_hvgs, exprs_values = "logcounts_smooth")
+
+dim(reducedDim(spe, "PCA"))
+```
+
+```{r}
+# UMAP on top 50 PCs -> for visualization
+set.seed(123)
+spe <-  runUMAP(spe, dimred= "PCA", exprs_values = "logcounts_smooth")
+
+dim(reducedDim(spe, "PCA"))
+dim(reducedDim(spe, "UMAP"))
+```
+
+```{r}
+# update column names
+colnames(reducedDim(spe, "UMAP")) <- paste0("UMAP", 1:2)
+```
+
+
+```{r}
+plotDimRed(spe, type = "PCA")
+```
+
+```{r}
+pcs <- reducedDim(spe, "PCA")
+# plot(pcs)
+```
+
+
+
+##### Clustering
+
+*k-means*
+
+```{r}
+Wss <- c()
+
+for(i in 1:10){
+  km <- kmeans(pcs, i)
+  Wss <- c(Wss, km$tot.withinss)
+}
+
+plot(c(1:10), Wss, type = 'l') ## kink at 2 (maybe another at 4 and maybe abother at 6)
+
+```
+
+```{r}
+km.2 <- kmeans(pcs, centers = 2)
+
+plot(pcs[,1], pcs[,2])
+for(i in 1:2){
+    points(pcs[which(km.2$cluster == i),1],
+          pcs[which(km.2$cluster == i),2],col=i)
+  }
+```
+
+
+
+
+```{r}
+set.seed(123)
+km.7 <- kmeans(pcs, centers = 7)
+
+table(km.7$cluster)
+
+plot(pcs[,1], pcs[,2])
+for(i in 1:7){
+    points(pcs[which(km.7$cluster == i),1],
+          pcs[which(km.7$cluster == i),2],col=i)
+  }
+```
+
+```{r}
+# kmeans cluster assignments
+km.clus <- km.7$cluster
+
+# store cluster label in column 'label' in colData
+colLabels(spe) <- factor(km.clus)
+```
+
+
+##### Visualizations
+
+```{r}
+# plot clusters in spatial x-y coordinates
+plotSpots(spe, annotate = "label", 
+          palette = "libd_layer_colors",
+          size = 0.8)
+```
+
+```{r}
+# plot ground truth labels in spatial coordinates
+plotSpots(spe, annotate = "ground_truth", 
+          palette = "libd_layer_colors",
+          size = 0.7) # annotate - for clustering labels, use smoothclust labels later
+```
+
+
+Reduced Dimensionality Cluster Visualization
+
+```{r}
+# plot clusters in PCA reduced dimensions
+plotDimRed(spe, type = "PCA", 
+           annotate = "label", palette = "libd_layer_colors",
+           size = 0.7)
+```
+
+
+
+```{r}
+# plot clusters in UMAP reduced dimensions
+plotDimRed(spe, type = "UMAP", 
+           annotate = "label", palette = "libd_layer_colors",
+           size = 0.7)
+```

@@ -17,6 +17,8 @@ library(STexampleData)
 library(scran)
 library(ggspavis)
 library(scater)
+library(smoothclust)
+library(stats)
 ```
 
 ## Example of smoothclust workflow
@@ -58,10 +60,8 @@ dim(spe)
 ### **RUN SMOOTHCLUST**
 
 ```{r}
-library(smoothclust)
-```
+# library(smoothclust)
 
-```{r}
 # run smoothclust
 spe <- smoothclust(spe, method = "kernel")
 ```
@@ -97,10 +97,23 @@ colnames(reducedDim(spe, "UMAP")) <- paste0("UMAP", 1:2)
 ```
 
 
+```{r}
+plotDimRed(spe, type = "PCA")
+```
+
+```{r}
+pcs <- reducedDim(spe, "PCA")
+```
+
+
+
+
+
 
 
 ### Clustering
 
+*graph-based*
 ```{r}
 # graph-based clustering
 set.seed(123)
@@ -117,9 +130,17 @@ colLabels(spe) <- factor(clus)
 ```
 
 
+### Visualizations
+
 ```{r}
-library(ggspavis)
+# library(ggspavis)
 ```
+
+```{r}
+# colors
+# clust_colors <- c("mediumorchid", "forestgreen", "deeppink", "black", "darkorange", "gold", "steelblue", "dimgray", "darkred", "slateblue4", "navyblue", "olivedrab3", "lightsalmon")
+```
+
 
 ```{r}
 # plot clusters in spatial x-y coordinates
